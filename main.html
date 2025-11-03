@@ -1,0 +1,73 @@
+<!DOCTYPE HTML>
+<html lang="en-US">
+    <meta charset="UTF-8" />
+    <head>
+		<input type="text" id="inputLat" placeholder="Enter latitude here">
+		<input type="text" id="inputLong" placeholder="Enter longitude here"><br>
+		<input type="checkbox" id="forecastRequest">
+		<label for="forecastRequest">Forecast</label>
+		<input type="checkbox" id="historicalDataRequest">
+		<label for="historicalDataRequest">Historical Data</label><br>
+		<input type="radio" id="farenheit" name="tempScale">
+		<label for="farenheit">Farenheit</label>
+		<input type="radio" id="celsius" name="tempScale">
+		<label for="celsius">Celsius</label>
+		<button id="submitButton" onclick="getWeatherReport()">Get Value</button>
+	</head>
+    
+
+<script>
+    const apiCallHead = "https://api.open-meteo.com/v1/forecast?";
+	
+	function getWeatherReport(){
+		const inputLat = document.getElementById("inputLat").value.trim();
+		const inputLong = document.getElementById("inputLong").value.trim();
+		const forecastRequest = document.getElementById("forecastRequest").checked;
+		const historicalDataRequest = document.getElementById("historicalDataRequest").checked;
+		const inputLatFloat = parseFloat(inputLat);
+		const inputLongFloat = parseFloat(inputLong);
+		if (isNaN(inputLatFloat) || isNaN(inputLongFloat)) {
+			alert("Please enter valid numbers for latitude and longitude! Please resubmit.");
+			return
+		}
+		if (inputLatFloat < -90 || inputLatFloat > 90) {
+			alert("Latitude must be between -90 and 90 degrees! Please resubmit.");
+			return
+		}
+		if (inputLongFloat < -180 || inputLongFloat > 180) {
+			alert("Longitude must be between -180 and 180 degrees! Please resubmit.");
+			return
+		}
+
+
+
+	}
+
+    async function getWeather(lat,long){
+	    try {
+		    const response = await fetch(apiCallHead + "latitude="+lat+ "&longitude="+long+"&hourly=temperature_2m");
+		    if (!response.ok) {
+			    throw new Error(`HTTP Error: ${response.status}`);
+            }
+		    const data = await response.json();
+		    return data;
+	    } catch (error) {
+		    console.error(`Could not get weather: ${error}`);
+	    }
+    }
+	console.log(getWeather(44.6995,73.4529))
+
+	async function getWeatherHistory(lat,long){
+	    try {
+		    const response = await fetch(apiCallHead + "latitude="+lat+ "&longitude="+long+"&hourly=temperature_2m");
+		    if (!response.ok) {
+			    throw new Error(`HTTP Error: ${response.status}`);
+            }
+		    const data = await response.json();
+		    return data;
+	    } catch (error) {
+		    console.error(`Could not get weather: ${error}`);
+	    }
+    }
+</script>
+</html>
