@@ -1,31 +1,42 @@
 <!DOCTYPE HTML>
 <html lang="en-US">
+<head>
     <meta charset="UTF-8" />
-    <head>
-		<input type="text" id="inputLat" placeholder="Enter latitude here">
-		<input type="text" id="inputLong" placeholder="Enter longitude here"><br>
-		<input type="checkbox" id="forecastRequest">
-		<label for="forecastRequest">Forecast</label>
-		<input type="checkbox" id="historicalDataRequest">
-		<label for="historicalDataRequest">Historical Data</label><br>
-		<input type="radio" id="farenheit" name="tempScale">
-		<label for="farenheit">Farenheit</label>
-		<input type="radio" id="celsius" name="tempScale">
-		<label for="celsius">Celsius</label>
-		<button id="submitButton" onclick="getWeatherReport()">Get Value</button>
-	</head>
+    <title>Weather Dashboard</title>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+</head>
+<body>
+    <input type="text" id="inputLat" placeholder="Enter latitude here">
+    <input type="text" id="inputLong" placeholder="Enter longitude here"><br>
+    <input type="checkbox" id="forecastRequest">
+    <label for="forecastRequest">Forecast</label>
+    <input type="checkbox" id="historicalDataRequest">
+    <label for="historicalDataRequest">Historical Data</label><br>
+    <input type="radio" id="farenheit" name="tempScale">
+    <label for="farenheit">Farenheit</label>
+    <input type="radio" id="celsius" name="tempScale">
+    <label for="celsius">Celsius</label>
+    <button id="submitButton" onclick="getWeatherReport()">Get Value</button>
+    <table id="forecastTable"></table>
     
 
 <script>
     const apiCallHead = "https://api.open-meteo.com/v1/forecast?";
 	
-	function getWeatherReport(){
+	async function getWeatherReport(){
+		//clears tables
+		$('#forecastTable tr').remove();
 		const inputLat = document.getElementById("inputLat").value.trim();
 		const inputLong = document.getElementById("inputLong").value.trim();
 		const forecastRequest = document.getElementById("forecastRequest").checked;
 		const historicalDataRequest = document.getElementById("historicalDataRequest").checked;
 		const inputLatFloat = parseFloat(inputLat);
 		const inputLongFloat = parseFloat(inputLong);
+		// determine temperature unit (default to fahrenheit)
+		let unit = 'fahrenheit';
+		if ($('#celsius') && $('#celsius').checked) {
+			unit = 'celsius';
+		}
 		if (isNaN(inputLatFloat) || isNaN(inputLongFloat)) {
 			alert("Please enter valid numbers for latitude and longitude! Please resubmit.");
 			return
@@ -39,23 +50,88 @@
 			return
 		}
 
+		if(forecastRequest){
+			console.log(unit)
+			const forecastData = await getWeatherForecast(inputLatFloat, inputLongFloat, unit);
+			console.log(forecastData.daily);
+			if (forecastData && forecastData.daily) {
+				renderForecastTable(forecastData);
+			} else {
+				alert('No daily forecast data to render');
+			}
+		}
 
 
 	}
 
-    async function getWeather(lat,long){
+    async function getWeatherForecast(lat,long, unit){
 	    try {
-		    const response = await fetch(apiCallHead + "latitude="+lat+ "&longitude="+long+"&hourly=temperature_2m");
+		    const response = await fetch(apiCallHead + "latitude="+lat+ "&longitude="+long+"&daily=temperature_2m_max,temperature_2m_min,weather_code&temperature_unit=" + unit);
 		    if (!response.ok) {
 			    throw new Error(`HTTP Error: ${response.status}`);
             }
-		    const data = await response.json();
+		    const data = await response.json(); 	
 		    return data;
 	    } catch (error) {
 		    console.error(`Could not get weather: ${error}`);
 	    }
     }
-	console.log(getWeather(44.6995,73.4529))
+
+	// Render forecastData into #forecastTable so each column n contains:
+	//   top row: forecastData.daily.weather_code[n]
+	//   second row: forecastData.daily.temperature_2m_max[n]
+	//   third row: forecastData.daily.temperature_2m_min[n]
+	// Column numbers (n) are zero-based and shown in the header.
+	function renderForecastTable(forecastData) {
+	    const table = document.getElementById('forecastTable');
+	    // clear any existing content
+	    table.innerHTML = '';
+
+	    const codes = (forecastData.daily.weather_code) || [];
+	    const maxs = (forecastData.daily.temperature_2m_max) || [];
+	    const mins = (forecastData.daily.temperature_2m_min) || [];
+	    const days = (forecastData.daily.time) || [];
+
+	    const count = codes.length;
+
+	    // Header row: show column number and date
+	    const headerRow = document.createElement('tr');
+	    for (let i = 0; i < count; i++) {
+	        const th = document.createElement('th');
+	        th.textContent = (days[i] ? ` — ${days[i]}` : '');
+	        headerRow.appendChild(th);
+	    }
+
+	    // weather_codes row
+	    const rowCodes = document.createElement('tr');
+		for (let i = 0; i < count; i++) {
+	        const th = document.createElement('th');
+	        th.textContent = codes[i];
+	        rowCodes.appendChild(th);
+	    }
+
+		// temp max row
+	    const rowMax = document.createElement('tr');
+		for (let i = 0; i < count; i++) {
+	        const th = document.createElement('th');
+	        th.textContent = maxs[i];
+	        rowMax.appendChild(th);
+	    }
+
+		// temp min row
+	    const rowMin = document.createElement('tr');
+		for (let i = 0; i < count; i++) {
+	        const th = document.createElement('th');
+	        th.textContent = mins[i];
+	        rowMin.appendChild(th);
+	    }
+		
+		table.appendChild(headerRow);
+		table.appendChild(rowCodes);
+		table.appendChild(rowMax);
+		table.appendChild(rowMin);
+
+	}
 
 	async function getWeatherHistory(lat,long){
 	    try {
