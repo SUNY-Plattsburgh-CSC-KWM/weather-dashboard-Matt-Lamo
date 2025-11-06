@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <title>Weather Dashboard</title>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/date-fns"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 </head>
 <body>
     <input type="text" id="inputLat" placeholder="Enter latitude here">
@@ -18,7 +21,7 @@
     <label for="celsius">Celsius</label>
     <button id="submitButton" onclick="getWeatherReport()">Get Value</button>
     <table id="forecastTable"></table>
-    
+    <canvas id="historyGraph" style="width:700px"></canvas>
 
 <script>
     const apiCallHead = "https://api.open-meteo.com/v1/forecast?";
@@ -33,9 +36,12 @@
 		const inputLatFloat = parseFloat(inputLat);
 		const inputLongFloat = parseFloat(inputLong);
 		// determine temperature unit (default to fahrenheit)
-		let unit = 'fahrenheit';
-		if ($('#celsius') && $('#celsius').checked) {
+		var unit = '';
+		if (document.getElementById('celsius').checked) {
 			unit = 'celsius';
+		}
+		else{
+			unit = 'fahrenheit';
 		}
 		if (isNaN(inputLatFloat) || isNaN(inputLongFloat)) {
 			alert("Please enter valid numbers for latitude and longitude! Please resubmit.");
@@ -50,14 +56,26 @@
 			return
 		}
 
+		
 		if(forecastRequest){
-			console.log(unit)
+			console.log("forecast requested");
 			const forecastData = await getWeatherForecast(inputLatFloat, inputLongFloat, unit);
 			console.log(forecastData.daily);
 			if (forecastData && forecastData.daily) {
 				renderForecastTable(forecastData);
 			} else {
 				alert('No daily forecast data to render');
+			}
+		}
+		
+		if(historicalDataRequest){
+			console.log("historicalData requested");
+			const historicalData = await getWeatherHistory(inputLatFloat,inputLongFloat, unit);
+			console.log(historicalData);
+			if (historicalData) {
+				renderHistoricalGraph(historicalData);
+			} else {
+				alert('No historical weather data to render');
 			}
 		}
 
@@ -77,14 +95,29 @@
 	    }
     }
 
-	// Render forecastData into #forecastTable so each column n contains:
-	//   top row: forecastData.daily.weather_code[n]
-	//   second row: forecastData.daily.temperature_2m_max[n]
-	//   third row: forecastData.daily.temperature_2m_min[n]
-	// Column numbers (n) are zero-based and shown in the header.
+	async function getWeatherHistory(lat,long, unit){
+		const end_date = new Date();
+		const start_date = new Date(end_date);
+		start_date.setUTCDate(end_date.getUTCDate() - 31);
+		const end_Str = end_date.toISOString().slice(0,10);
+		const start_Str = start_date.toISOString().slice(0,10);
+		//console.log(end_Str);
+		//console.log(start_Str);
+	    try {
+		    const response = await fetch("https://historical-forecast-api.open-meteo.com/v1/forecast?" + "latitude="+lat+ "&longitude="+long+"&daily=temperature_2m_max,temperature_2m_min&temperature_unit="+ unit + "&start_date=" +start_Str + "&end_date="+end_Str);
+		    if (!response.ok) {
+			    throw new Error(`HTTP Error: ${response.status}`);
+            }
+		    const data = await response.json(); 	
+		    return data;
+	    } catch (error) {
+		    console.error(`Could not get weather: ${error}`);
+	    }
+    }
+
+
 	function renderForecastTable(forecastData) {
 	    const table = document.getElementById('forecastTable');
-	    // clear any existing content
 	    table.innerHTML = '';
 
 	    const codes = (forecastData.daily.weather_code) || [];
@@ -94,7 +127,6 @@
 
 	    const count = codes.length;
 
-	    // Header row: show column number and date
 	    const headerRow = document.createElement('tr');
 	    for (let i = 0; i < count; i++) {
 	        const th = document.createElement('th');
@@ -104,9 +136,26 @@
 
 	    // weather_codes row
 	    const rowCodes = document.createElement('tr');
+		const map = { //emojis suggested by forum online instead of inserting image elements
+			0: '☀️', 
+			1: '🌤️', 
+			2: '⛅', 
+			3: '☁️',
+			45: '🌫️', 48: '🌫️',
+			51: '🌦️', 53: '🌦️', 55: '🌦️',
+			 56: '🌧️', 57: '🌧️',
+			  61: '🌧️', 63: '🌧️', 65: '🌧️',
+			66: '❄️', 67: '❄️',
+			71: '🌨️', 73: '🌨️', 75: '🌨️',
+			77: '🌨️',
+			80: '🌧️', 81: '🌧️', 82: '🌧️',
+			85: '❄️', 86: '❄️',
+			95: '⛈️', 96: '⛈️', 99: '⛈️'
+		};
+
 		for (let i = 0; i < count; i++) {
 	        const th = document.createElement('th');
-	        th.textContent = codes[i];
+	        th.textContent = map[codes[i]];
 	        rowCodes.appendChild(th);
 	    }
 
@@ -133,17 +182,65 @@
 
 	}
 
-	async function getWeatherHistory(lat,long){
-	    try {
-		    const response = await fetch(apiCallHead + "latitude="+lat+ "&longitude="+long+"&hourly=temperature_2m");
-		    if (!response.ok) {
-			    throw new Error(`HTTP Error: ${response.status}`);
-            }
-		    const data = await response.json();
-		    return data;
-	    } catch (error) {
-		    console.error(`Could not get weather: ${error}`);
-	    }
-    }
-</script>
+	function renderHistoricalGraph(historicalData){
+
+		const xDates = (historicalData.daily.time) || [];
+		const yMaxTemps = (historicalData.daily.temperature_2m_max) || [];
+		const yMinTemps = (historicalData.daily.temperature_2m_min) || [];
+
+
+
+		const chart1 = new Chart(document.getElementById("historyGraph"), { //used geeksforgeeks.org as reference for formatting chart.js
+			type: 'line',
+			data: {
+				labels: xDates,
+				datasets: [
+					{
+						yAxisID: 'maxTemperature',
+						label: 'Maximum Temperature',
+						data: yMaxTemps,
+						borderWidth: 1,
+						backgroundColor: 'white',
+						borderColor: 'red'
+					},
+					{
+						yAxisID: 'second',
+						label: 'Courses Growth',
+						data: yMinTemps,
+						backgroundColor: 'white',
+						borderColor: 'blue'
+					}
+				]
+			},
+			options: {
+				responsive: true,
+				scales: {
+					first: {
+						type: 'linear',
+						position: 'left',
+						ticks: 
+						{ 
+							beginAtZero: true, 
+							color: 'red' 
+						},
+						grid: { display: false }
+					},
+					second: {
+						type: 'linear',
+						position: 'right',
+						ticks: 
+						{ 
+							beginAtZero: true, 
+							color: 'blue' 
+						},
+						grid: { display: false }
+					},
+					x: { ticks: { beginAtZero: true } }
+				}
+			}
+		})
+
+	}
+
+	</script>
 </html>
